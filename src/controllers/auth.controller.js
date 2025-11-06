@@ -5,6 +5,7 @@ import TokenBlacklist from "../models/tokenBlacklist.model.js";
 import crypto from "crypto";
 import { generateRefreshToken, hashToken } from "../utils/token.js";
 import RefreshToken from "../models/refreshToken.model.js";
+import axios from "axios";
 
 const REFRESH_EXPIRE_MS = 604800;
 
@@ -200,7 +201,8 @@ export const forgotPassword = async (req, res) => {
     await user.save();
 
     // TODO: Send email with reset token
-    // const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    //need nodemailer + more setup
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
     return res.status(200).json({
       message: "Password reset instructions sent to email",
@@ -276,6 +278,8 @@ export const refreshToken = async (req, res) => {
 };
 
 export const loginWithGoogle = async (req, res) => {
+  const clientID = process.env.GOOGLE_CLIENT_ID;
+  const redirectURI = process.env.GOOGLE_REDIRECT_URI;
   const scope = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
@@ -283,11 +287,11 @@ export const loginWithGoogle = async (req, res) => {
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientID}&redirect_uri=${redirectURI}&response_type=code&scope=${scope.join(
     " "
   )}&access_type=offline&prompt=consent`;
-  res.redirect(authUrl);
+  res.render("login", { authUrl });
 };
 
 export const handleRedirect = async (req, res) => {
-  const code = req.query.data;
+  const code = req.query.code;
   try {
     //Exchange code for data
     const { data } = await axios.post(
@@ -301,19 +305,48 @@ export const handleRedirect = async (req, res) => {
       },
       { headers: { "Content-Type": "application/json" } }
     );
-    const accessToken = data.accessToken;
+    const accessToken = data.access_token;
 
     //fetch user profile
-    const userProfile = await axios.post(process.env.GOOGLE_AUTH_URI, {
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    const user = userProfile.data;
+    const userProfile = await axios.get(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+    const googleUser = userProfile.data;
 
-    const token = jwt.sign(user, process.env.ACCESS_SECRET_KEY, {
-      expiresIn: process.env.ACCESS_EXPIRE_IN,
-    });
+    const user = await User.findOneAndUpdate(
+      { email: googleUser.email },
+      {
+        $set: {
+          id: googleUser.id,
+          email: googleUser.email,
+          name: googleUser.name,
+          role: googleUser.role,
+        },
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      process.env.ACCESS_SECRET_KEY,
+      {
+        expiresIn: process.env.ACCESS_EXPIRE_IN,
+      }
+    );
 
-    res.json({ message: "Login successful", user, token });
+    res.json({
+      message: "Login successful",
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        token,
+      },
+    });
+    // res.redirect("/");
   } catch (error) {
     console.error("Google Auth error", error.response?.data || error.message);
     res.status(500).json({ message: "Authentication with Google failed" });

@@ -6,6 +6,7 @@ const protect = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     const accessToken = authHeader && authHeader.split(" ")[1];
     if (!accessToken) {
+      // res.redirect("/auth/google");
       return res.status(401).json({ message: "Unauthorized access" });
     }
 
