@@ -3,6 +3,7 @@ import todoRoutes from "./routes/todo.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import protect from "./middleware/auth.js";
 import path from "path";
+import cookieParser from "cookie-parser";
 
 // Main Express application setup
 
@@ -12,6 +13,7 @@ app.set("view engine", "pug");
 app.set("views", path.join(import.meta.dirname, "views"));
 // Middleware
 app.use(express.json());
+app.use(cookieParser());
 
 app.use((err, req, res, next) => {
   console.error(err);

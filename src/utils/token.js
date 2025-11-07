@@ -5,5 +5,5 @@ export const generateRefreshToken = () => {
 };
 
 export const hashToken = (token) => {
-  return crypto.createHash("256").update(token).digest("hex");
+  return crypto.createHash("sha256").update(token).digest("hex");
 };

@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { generateRefreshToken, hashToken } from "../utils/token.js";
 import RefreshToken from "../models/refreshToken.model.js";
 import axios from "axios";
+import cookieParser from "cookie-parser";
 
 const REFRESH_EXPIRE_MS = 604800;
 
@@ -77,7 +78,7 @@ export const loginWithID = async (req, res) => {
     res.cookie("refreshToken", rawRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       maxAge: REFRESH_EXPIRE_MS,
       path: "/auth/refresh",
     });
@@ -85,6 +86,7 @@ export const loginWithID = async (req, res) => {
     return res.status(200).json({
       message: "Login succesfully",
       accessToken,
+      refreshToken,
       user: {
         id: user._id,
         username: user.username,
@@ -216,14 +218,14 @@ export const forgotPassword = async (req, res) => {
 };
 
 export const refreshToken = async (req, res) => {
-  const raw = req.cookie?.refreshToken;
+  const raw = req.cookies?.refreshToken;
   if (!raw) {
     return res.status(401).json({ message: "No refresh token" });
   }
 
   const token = hashToken(raw);
 
-  const tokenDoc = await RefreshToken.findOneAndDelete(hashToken);
+  const tokenDoc = await RefreshToken.findOneAndDelete(token);
 
   //not found => possible reuse/invalid
   if (!tokenDoc) {
@@ -269,7 +271,7 @@ export const refreshToken = async (req, res) => {
     userId: tokenDoc.userId,
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "strict",
     maxAge: REFRESH_EXPIRE_MS,
     path: "/refresh",
   });
@@ -339,7 +341,7 @@ export const handleRedirect = async (req, res) => {
     res.json({
       message: "Login successful",
       user: {
-        id: user.id,
+        id: user._id,
         email: user.email,
         name: user.name,
         picture: user.picture,
