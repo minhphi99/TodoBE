@@ -7,6 +7,7 @@ import { generateRefreshToken, hashToken } from "../utils/token.js";
 import RefreshToken from "../models/refreshToken.model.js";
 import axios from "axios";
 import cookieParser from "cookie-parser";
+import nodemailer from "nodemailer";
 
 const REFRESH_EXPIRE_MS = 604800;
 
@@ -22,7 +23,13 @@ export const registerUser = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: "User already existed" });
     } else {
-      const user = await User.create({ username, password, email, role });
+      const user = await User.create({
+        username,
+        password,
+        email,
+        role,
+        loginType: "local",
+      });
       return res.status(200).json({
         message: "User created successfully",
         user: {
@@ -30,7 +37,7 @@ export const registerUser = async (req, res) => {
           username: user.username,
           email: user.email,
           role: user.role,
-        },
+          loginType: user.loginType,
       });
     }
   } catch (error) {
@@ -66,14 +73,6 @@ export const loginWithID = async (req, res) => {
       expireDate: refreshExpireDate,
     });
 
-    // const refreshToken = jwt.sign(
-    //   { id: user._id },
-    //   process.env.REFRESH_SECRET_KEY,
-    //   {
-    //     expiresIn: process.env.REFRESH_EXPIRE_IN,
-    //   }
-    // );
-
     //check this again
     res.cookie("refreshToken", rawRefreshToken, {
       httpOnly: true,
@@ -92,6 +91,7 @@ export const loginWithID = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        loginType: user.loginType,
       },
     });
   } catch (error) {
@@ -204,6 +204,34 @@ export const forgotPassword = async (req, res) => {
 
     // TODO: Send email with reset token
     //need nodemailer + more setup
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      port: 587,
+      secure: false, // use SSL
+      auth: {
+        type: "OAuth2",
+        user: "1a2b3c4d5e6f7g",
+        clientId: process.env.GOOGLE_CLIENT_ID,
+      },
+    });
+
+    // Configure the mailoptions object
+    const mailOptions = {
+      from: "serviceprovider@email.com",
+      to: email,
+      subject: "Verification code for password reset",
+      text: content,
+    };
+
+    // Send the email
+    transporter.sendMail(mailOptions, function (error, info) {
+      if (error) {
+        console.log("Error:", error);
+      } else {
+        console.log("Email sent:", info.response);
+      }
+    });
+
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
     return res.status(200).json({
@@ -318,36 +346,89 @@ export const handleRedirect = async (req, res) => {
     );
     const googleUser = userProfile.data;
 
-    const user = await User.findOneAndUpdate(
-      { email: googleUser.email },
-      {
-        $set: {
-          id: googleUser.id,
-          email: googleUser.email,
-          name: googleUser.name,
-          role: googleUser.role,
+    //Approach 1
+    //separate signup and login with OAuth
+    const existingUser = await User.findOne({ email: googleUser.email });
+    if (existingUser) {
+      const token = jwt.sign(
+        {
+          id: existingUser._id,
+          email: existingUser.email,
+          role: existingUser.role,
         },
-      },
-      { upsert: true, new: true, runValidators: true }
-    );
-    const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
-      process.env.ACCESS_SECRET_KEY,
-      {
-        expiresIn: process.env.ACCESS_EXPIRE_IN,
-      }
-    );
+        process.env.ACCESS_SECRET_KEY,
+        {
+          expiresIn: process.env.ACCESS_EXPIRE_IN,
+        }
+      );
+      res.json({
+        message: "Login successful",
+        user: {
+          id: existingUser._id,
+          email: existingUser.email,
+          name: existingUser.name,
+          loginType: "google",
+          token,
+        },
+      });
+    } else {
+      const newUser = await User.create({
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role,
+        loginType: 'google'
+      });
+      const token = jwt.sign(
+        { id: newUser._id, email: newUser.email, role: newUser.role },
+        process.env.ACCESS_SECRET_KEY,
+        {
+          expiresIn: process.env.ACCESS_EXPIRE_IN,
+        }
+      );
+      res.json({
+        message: "Signup successful",
+        user: {
+          id: newUser._id,
+          email: newUser.email,
+          name: newUser.name,
+          loginType: newUser.loginType,
+          token,
+        },
+      });
+    }
 
-    res.json({
-      message: "Login successful",
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        picture: user.picture,
-        token,
-      },
-    });
+    //Approach 2
+    // const user = await User.findOneAndUpdate(
+    //   { email: googleUser.email },
+    //   {
+    //     $set: {
+    //       id: googleUser.id,
+    //       username: googleUser.email,
+    //       email: googleUser.email,
+    //       name: googleUser.name,
+    //     },
+    //   },
+    //   { upsert: true, new: true, runValidators: true }
+    // );
+    // const token = jwt.sign(
+    //   { id: user._id, email: user.email, role: user.role },
+    //   process.env.ACCESS_SECRET_KEY,
+    //   {
+    //     expiresIn: process.env.ACCESS_EXPIRE_IN,
+    //   }
+    // );
+
+    // res.json({
+    //   message: "Login successful",
+    //   user: {
+    //     id: user._id,
+    //     email: user.email,
+    //     name: user.name,
+    //     picture: user.picture,
+    //     token,
+    //   },
+    // });
     // res.redirect("/");
   } catch (error) {
     console.error("Google Auth error", error.response?.data || error.message);
