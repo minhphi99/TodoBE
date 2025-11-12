@@ -1,6 +1,6 @@
 // import roles from "../models/roles";
 
-export const authrorizeRoles = (...roles) => {
+export const authorizeRoles = (...roles) => {
   return (req, res, next) => {
     try {
       if (!req.user || !req.user.role) {

@@ -13,7 +13,7 @@ const REFRESH_EXPIRE_MS = 604800;
 
 export const registerUser = async (req, res) => {
   try {
-    const { username, password, email, role } = req.body;
+    const { username, email, password } = req.body;
 
     if (!username || !password || !email) {
       return res.status(400).json({ message: "Required field is missing" });
@@ -38,6 +38,7 @@ export const registerUser = async (req, res) => {
           email: user.email,
           role: user.role,
           loginType: user.loginType,
+        },
       });
     }
   } catch (error) {
@@ -139,7 +140,7 @@ export const logoutUser = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized access" });
     }
     await TokenBlacklist.create({ token });
-    //clear refresh token from cookies
+    //clear accesss token from cookies
     return res.status(200).json({ message: "logout succesfully" });
   } catch (error) {
     console.error(error);
@@ -338,98 +339,43 @@ export const handleRedirect = async (req, res) => {
     const accessToken = data.access_token;
 
     //fetch user profile
-    const userProfile = await axios.get(
+    const { data: googleUser } = await axios.get(
       "https://www.googleapis.com/oauth2/v3/userinfo",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
-    const googleUser = userProfile.data;
+    const { email, name, id } = googleUser;
 
-    //Approach 1
     //separate signup and login with OAuth
-    const existingUser = await User.findOne({ email: googleUser.email });
-    if (existingUser) {
-      const token = jwt.sign(
-        {
-          id: existingUser._id,
-          email: existingUser.email,
-          role: existingUser.role,
-        },
-        process.env.ACCESS_SECRET_KEY,
-        {
-          expiresIn: process.env.ACCESS_EXPIRE_IN,
-        }
-      );
-      res.json({
-        message: "Login successful",
-        user: {
-          id: existingUser._id,
-          email: existingUser.email,
-          name: existingUser.name,
-          loginType: "google",
-          token,
-        },
-      });
-    } else {
-      const newUser = await User.create({
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        role: newUser.role,
-        loginType: 'google'
-      });
-      const token = jwt.sign(
-        { id: newUser._id, email: newUser.email, role: newUser.role },
-        process.env.ACCESS_SECRET_KEY,
-        {
-          expiresIn: process.env.ACCESS_EXPIRE_IN,
-        }
-      );
-      res.json({
-        message: "Signup successful",
-        user: {
-          id: newUser._id,
-          email: newUser.email,
-          name: newUser.name,
-          loginType: newUser.loginType,
-          token,
-        },
+    const user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        id: id,
+        email: email,
+        name: name,
+        role: "user",
+        loginType: "google",
       });
     }
 
-    //Approach 2
-    // const user = await User.findOneAndUpdate(
-    //   { email: googleUser.email },
-    //   {
-    //     $set: {
-    //       id: googleUser.id,
-    //       username: googleUser.email,
-    //       email: googleUser.email,
-    //       name: googleUser.name,
-    //     },
-    //   },
-    //   { upsert: true, new: true, runValidators: true }
-    // );
-    // const token = jwt.sign(
-    //   { id: user._id, email: user.email, role: user.role },
-    //   process.env.ACCESS_SECRET_KEY,
-    //   {
-    //     expiresIn: process.env.ACCESS_EXPIRE_IN,
-    //   }
-    // );
-
-    // res.json({
-    //   message: "Login successful",
-    //   user: {
-    //     id: user._id,
-    //     email: user.email,
-    //     name: user.name,
-    //     picture: user.picture,
-    //     token,
-    //   },
-    // });
-    // res.redirect("/");
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      process.env.ACCESS_SECRET_KEY,
+      {
+        expiresIn: process.env.ACCESS_EXPIRE_IN,
+      }
+    );
+    res.json({
+      message: user.isNew ? "Signup successful" : "Login successful",
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        loginType: user.loginType,
+        token,
+      },
+    });
   } catch (error) {
     console.error("Google Auth error", error.response?.data || error.message);
     res.status(500).json({ message: "Authentication with Google failed" });
