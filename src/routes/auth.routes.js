@@ -25,13 +25,13 @@ authRoutes.get("/me", protect, async (req, res) => {
 });
 
 authRoutes.post("/register", registerUser);
-authRoutes.post("/login", loginWithID);
-authRoutes.post("/changepw", protect, changePassword);
+authRoutes.post("/loginID", loginWithID);
+authRoutes.post("/changepw", protect, changePassword); //user tu doi mk
 authRoutes.post("/logout", protect, logoutUser);
-authRoutes.post("/forgotpw", forgotPassword);
-authRoutes.post("/forgotpw/:id/:token", resetPassword);
+authRoutes.post("/forgotpw", forgotPassword); // gui link den mail de reset mk
+authRoutes.post("/resetpw/:token", resetPassword); //dung link de reset mk
 authRoutes.post("/refresh", refreshToken);
-authRoutes.get("/google", loginWithGoogle);
+authRoutes.get("/loginGoogle", loginWithGoogle);
 authRoutes.get("/google/callback", handleRedirect);
 
 export default authRoutes;

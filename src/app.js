@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 import cors from "cors";
 
 // Main Express application setup
-const limiter = new rateLimit({
+const limiter = rateLimit({
   limit: 100,
   windowMs: 15 * 60 * 1000,
   message: "too many API request in certain timeframe",
@@ -21,12 +21,12 @@ app.set("views", path.join(import.meta.dirname, "views"));
 app.use(express.json());
 app.use(
   cors({
-    origin: "http:/localhost:5173",
+    origin: "http://localhost:5173",
     credentials: true,
   })
 );
 app.use(cookieParser());
-app.use(limiter());
+app.use(limiter);
 
 app.use((err, req, res, next) => {
   console.error(err);

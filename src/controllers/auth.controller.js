@@ -8,14 +8,17 @@ import RefreshToken from "../models/refreshToken.model.js";
 import axios from "axios";
 import cookieParser from "cookie-parser";
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+import { sendPasswordResetEmail } from "../utils/sendmail.js";
 
+dotenv.config();
 const REFRESH_EXPIRE_MS = 604800;
 
 export const registerUser = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, confirmPassword } = req.body;
 
-    if (!username || !password || !email) {
+    if (!username || !password || !email || !confirmPassword) {
       return res.status(400).json({ message: "Required field is missing" });
     }
 
@@ -25,9 +28,9 @@ export const registerUser = async (req, res) => {
     } else {
       const user = await User.create({
         username,
-        password,
         email,
-        role,
+        password,
+        role: "user",
         loginType: "local",
       });
       return res.status(200).json({
@@ -184,6 +187,7 @@ export const resetPassword = async (req, res) => {
 
 export const forgotPassword = async (req, res) => {
   try {
+    // 1. Find user
     const { email } = req.body;
 
     if (!email) {
@@ -196,49 +200,17 @@ export const forgotPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Generate password reset token
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000;
-
-    await user.save();
-
-    // TODO: Send email with reset token
-    //need nodemailer + more setup
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      port: 587,
-      secure: false, // use SSL
-      auth: {
-        type: "OAuth2",
-        user: "1a2b3c4d5e6f7g",
-        clientId: process.env.GOOGLE_CLIENT_ID,
-      },
+    // 2. Generate password reset token
+    const token = jwt.sign({ userId: user.id }, process.env.ACCESS_SECRET_KEY, {
+      expiresIn: "15m",
     });
 
-    // Configure the mailoptions object
-    const mailOptions = {
-      from: "serviceprovider@email.com",
-      to: email,
-      subject: "Verification code for password reset",
-      text: content,
-    };
-
-    // Send the email
-    transporter.sendMail(mailOptions, function (error, info) {
-      if (error) {
-        console.log("Error:", error);
-      } else {
-        console.log("Email sent:", info.response);
-      }
-    });
-
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    // 3. Send email with token
+    await sendPasswordResetEmail(email, token);
 
     return res.status(200).json({
       message: "Password reset instructions sent to email",
-      // Remove token in production, only for testing
-      resetToken,
+      token,
     });
   } catch (error) {
     console.error(error);
@@ -318,7 +290,7 @@ export const loginWithGoogle = async (req, res) => {
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientID}&redirect_uri=${redirectURI}&response_type=code&scope=${scope.join(
     " "
   )}&access_type=offline&prompt=consent`;
-  res.render("login", { authUrl });
+  res.redirect(authUrl);
 };
 
 export const handleRedirect = async (req, res) => {
@@ -357,6 +329,10 @@ export const handleRedirect = async (req, res) => {
         role: "user",
         loginType: "google",
       });
+    } else if (user.loginType !== "google") {
+      return res
+        .status(400)
+        .json({ message: "User already signed up using local account" });
     }
 
     const token = jwt.sign(
@@ -372,6 +348,7 @@ export const handleRedirect = async (req, res) => {
         id: user._id,
         email: user.email,
         name: user.name,
+        role: user.role,
         loginType: user.loginType,
         token,
       },
