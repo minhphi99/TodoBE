@@ -12,6 +12,6 @@ todoRoutes.get("/", todoController.getAllTodos);
 todoRoutes.post("/", todoController.createTodo);
 todoRoutes.get("/:id", todoController.getTodoById);
 todoRoutes.put("/:id", todoController.updateTodoById);
-todoRoutes.delete("/:id", authorizeRoles, todoController.deleteTodo);
+todoRoutes.delete("/:id", todoController.deleteTodo);
 
 export default todoRoutes;

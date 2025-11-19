@@ -1,5 +1,6 @@
 // const Todo = require("../models/todo.model");
 import Todo from "../models/todo.model.js";
+import { success, error } from "./helper.js";
 
 export const createTodo = async (req, res) => {
   try {
@@ -27,7 +28,7 @@ export const getTodoById = async (req, res) => {
   try {
     const userId = req.user.id;
     const id = req.params.id;
-    const todo = await Todo.findOne({ id, userId });
+    const todo = await Todo.findOne({ _id, userId });
     if (!todo) {
       return res.status(404).json({ message: "Todo not found" });
     }
@@ -40,7 +41,6 @@ export const getTodoById = async (req, res) => {
 export const updateTodoById = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(userId, req.user, req.params.id);
     const updated = await Todo.findOneAndUpdate(
       { _id: req.params.id, userId },
       req.body,
@@ -56,7 +56,8 @@ export const updateTodoById = async (req, res) => {
 export const deleteTodo = async (req, res) => {
   try {
     const userId = req.user.id;
-    const deleted = await Todo.findOneAndDelete({ id: req.params.id, userId });
+    const { id } = req.params;
+    const deleted = await Todo.findOneAndDelete({ _id: id, userId });
     if (!deleted) {
       return res.status(404).json({ message: "Task not found" });
     }

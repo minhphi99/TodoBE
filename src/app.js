@@ -9,8 +9,8 @@ import cors from "cors";
 
 // Main Express application setup
 const limiter = rateLimit({
-  limit: 100,
-  windowMs: 15 * 60 * 1000,
+  limit: 200,
+  windowMs: 10 * 60 * 1000,
   message: "too many API request in certain timeframe",
 });
 const app = express();
@@ -26,7 +26,7 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(limiter);
+// app.use(limiter);
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -35,9 +35,7 @@ app.use((err, req, res, next) => {
     .json({ message: err.message || "Server Error" });
 });
 
-app.get("/", protect, async () => {
-  res.render("Hello, World");
-});
+// app.get("/", protect, async () => {});
 
 // Health check route
 app.get("/health", (req, res) => {
@@ -46,12 +44,12 @@ app.get("/health", (req, res) => {
     message: "Todo API is running",
   });
 });
-app.get("/hello/:name", async (req, res) => {
-  res.render("home", { name: req.params.name });
-});
+// app.get("/hello/:name", async (req, res) => {
+//   res.render("home", { name: req.params.name });
+// });
 
 // ✅ Tell app to use them
-app.use("/todos", protect, todoRoutes);
+app.use("/todo", protect, todoRoutes);
 app.use("/auth", authRoutes);
 
 export default app;

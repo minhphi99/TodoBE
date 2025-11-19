@@ -7,3 +7,7 @@ export const generateRefreshToken = () => {
 export const hashToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
+
+export const resetToken = () => {
+  return crypto.randomBytes(64).toString("hex");
+};

@@ -6,10 +6,10 @@ import crypto from "crypto";
 import { generateRefreshToken, hashToken } from "../utils/token.js";
 import RefreshToken from "../models/refreshToken.model.js";
 import axios from "axios";
-import cookieParser from "cookie-parser";
-import nodemailer from "nodemailer";
+// import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { sendPasswordResetEmail } from "../utils/sendmail.js";
+import { success, error } from "./helper.js";
 
 dotenv.config();
 const REFRESH_EXPIRE_MS = 604800;
@@ -21,7 +21,6 @@ export const registerUser = async (req, res) => {
     if (!username || !password || !email || !confirmPassword) {
       return res.status(400).json({ message: "Required field is missing" });
     }
-
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(400).json({ message: "User already existed" });
@@ -153,7 +152,7 @@ export const logoutUser = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const { token } = req.params;
+    const token = req.params;
     const { newPassword } = req.body;
 
     if (!newPassword) {
@@ -162,8 +161,10 @@ export const resetPassword = async (req, res) => {
         .json({ message: "invalid request, please enter new password" });
     }
 
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
     const user = await User.findOne({
-      resetPasswordToken: token,
+      resetPasswordToken: hashedToken,
       resetPasswordExpire: "1d",
     });
 
@@ -206,7 +207,7 @@ export const forgotPassword = async (req, res) => {
     });
 
     // 3. Send email with token
-    await sendPasswordResetEmail(email, token);
+    const msgId = await sendPasswordResetEmail(email, token);
 
     return res.status(200).json({
       message: "Password reset instructions sent to email",

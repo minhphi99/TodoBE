@@ -6,7 +6,6 @@ const protect = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     const accessToken = authHeader && authHeader.split(" ")[1];
     if (!accessToken) {
-      // res.redirect("/auth/google");
       return res.status(401).json({ message: "Unauthorized access" });
     }
 
@@ -18,6 +17,12 @@ const protect = async (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Token expired" });
+    }
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "Invalid token" });
+    }
     console.error(error);
     return res.status(500).json({ message: "Server error" });
   }

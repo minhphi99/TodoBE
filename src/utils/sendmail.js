@@ -3,27 +3,30 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-export const sendMail = async (email, subject, link) => {
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  requireTLS: false,
+  auth: {
+    user: process.env.GG_MAIL_USER,
+    pass: process.env.GG_MAIL_PW,
+  },
+});
+
+export const sendMail = async (options) => {
   try {
-    const transporter = nodemailer.createTransport({
-      host: "gmail.com",
-      port: 587,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.GG_MAIL_USER,
-        pass: process.env.GG_MAIL_PW,
-      },
-    });
+    return transporter.sendMail(options);
   } catch (error) {
     console.error(error, "email not sent");
   }
 };
 
 export async function sendPasswordResetEmail(userEmail, token) {
-  const resetLink = `${process.env.APP_BASE_URL}/reset-password?token=${token}`;
+  const resetLink = `${process.env.RESET_PW_URL}`;
 
   const mailOptions = {
-    from: `"Your App Name" <${process.env.GG_MAIL_USER}>`,
+    from: `"TODO LIST APP" <${process.env.GG_MAIL_USER}>`,
     to: userEmail,
     subject: "Password Reset Request",
     text: `Hi, \n\nYou requested a password reset. Click the link below to reset your password: \n${resetLink} \n\nThis link will expire in 15 minutes. \n\nIf you did not request this, please ignore this email.`,
@@ -37,7 +40,7 @@ export async function sendPasswordResetEmail(userEmail, token) {
   };
 
   try {
-    const info = await sendMail(userEmail, mailOptions, resetLink);
+    const info = await sendMail(mailOptions);
     console.log(`Password reset email sent to ${userEmail}`);
   } catch (error) {
     console.error(`Error sending email to ${userEmail}:`, error);
