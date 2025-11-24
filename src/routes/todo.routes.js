@@ -13,5 +13,6 @@ todoRoutes.post("/", todoController.createTodo);
 todoRoutes.get("/:id", todoController.getTodoById);
 todoRoutes.put("/:id", todoController.updateTodoById);
 todoRoutes.delete("/:id", todoController.deleteTodo);
+todoRoutes.put("/:id/toggle", todoController.toggleTodo);
 
 export default todoRoutes;

@@ -27,7 +27,7 @@ export const getAllTodos = async (req, res) => {
 export const getTodoById = async (req, res) => {
   try {
     const userId = req.user.id;
-    const id = req.params.id;
+    const _id = req.params.id;
     const todo = await Todo.findOne({ _id, userId });
     if (!todo) {
       return res.status(404).json({ message: "Todo not found" });
@@ -64,5 +64,25 @@ export const deleteTodo = async (req, res) => {
     res.json({ message: "Task deleted succesfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+export const toggleTodo = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const todoId = req.params.id;
+
+    const todo = await Todo.findOne({ _id: todoId, userId });
+
+    if (!todo) {
+      return res.status(400).json({ message: "Todo not found" });
+    }
+
+    todo.completed = !todo.completed;
+    await todo.save();
+
+    return res.status(200).json({ message: "Todo updated successfully" });
+  } catch (error) {
+    return res.status(500).json({ message: "Server issue" });
   }
 };

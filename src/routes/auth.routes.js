@@ -10,10 +10,12 @@ import {
   refreshToken,
   loginWithGoogle,
   handleRedirect,
+  userInfo,
 } from "../controllers/auth.controller.js";
 import User from "../models/user.model.js";
 
 const authRoutes = express.Router();
+
 authRoutes.get("/me", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password -__v");
@@ -31,6 +33,8 @@ authRoutes.post("/logout", protect, logoutUser);
 authRoutes.post("/forgotpw", forgotPassword); // gui link den mail de reset mk
 authRoutes.post("/resetpw/:token", resetPassword); //dung link de reset mk
 authRoutes.post("/refresh", refreshToken);
+//check again, might not want to use /auth route
+authRoutes.get("/me", protect, userInfo);
 authRoutes.get("/loginGoogle", loginWithGoogle);
 authRoutes.get("/google/callback", handleRedirect);
 

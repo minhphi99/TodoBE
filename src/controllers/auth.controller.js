@@ -12,7 +12,7 @@ import { sendPasswordResetEmail } from "../utils/sendmail.js";
 import { success, error } from "./helper.js";
 
 dotenv.config();
-const REFRESH_EXPIRE_MS = 604800;
+const REFRESH_EXPIRE_MS = 604800000;
 
 export const registerUser = async (req, res) => {
   try {
@@ -88,6 +88,7 @@ export const loginWithID = async (req, res) => {
     return res.status(200).json({
       message: "Login succesfully",
       accessToken,
+      rawRefreshToken,
       refreshToken,
       user: {
         id: user._id,
@@ -105,9 +106,14 @@ export const loginWithID = async (req, res) => {
 
 export const changePassword = async (req, res) => {
   try {
-    const { newPassword, currentPassword } = req.body;
+    const { currentpassword, newpassword, confirmpassword } = req.body;
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized access" });
+    }
 
-    if (!newPassword || !currentPassword) {
+    if (!newpassword || !currentpassword || !confirmpassword) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -117,20 +123,78 @@ export const changePassword = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const isMatch = await user.matchPassword(currentPassword);
+    const isMatch = await user.matchPassword(currentpassword);
     if (!isMatch) {
       return res.status(400).json({ message: "Incorrect user password" });
     }
 
-    const salt = await bcrypt.genSalt(12);
-    user.password = await bcrypt.hash(newPassword, salt);
+    if (newpassword === currentpassword) {
+      return res
+        .status(400)
+        .json({ message: "New password must be different" });
+    }
 
-    await user.save();
+    if (newpassword === confirmpassword) {
+      user.password = newpassword;
+      await user.save();
 
-    return res.status(200).json({ message: "Password changed succesfully" });
+      const payload = { id: user._id, role: user.role };
+      const accessToken = jwt.sign(payload, process.env.ACCESS_SECRET_KEY, {
+        expiresIn: process.env.ACCESS_EXPIRE_IN,
+      });
+      const rawRefreshToken = generateRefreshToken(user);
+      const refreshToken = hashToken(rawRefreshToken);
+
+      const refreshExpireDate = new Date(Date.now() + REFRESH_EXPIRE_MS);
+      await RefreshToken.create({
+        userId: user._id,
+        tokenHash: refreshToken,
+        expireDate: refreshExpireDate,
+      });
+
+      res.cookie("refreshToken", rawRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: REFRESH_EXPIRE_MS,
+        path: "/auth/refresh",
+      });
+
+      return res.status(200).json({
+        message: "Password changed succesfully",
+        accessToken,
+        refreshToken,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          loginType: user.loginType,
+        },
+      });
+    }
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server issue" });
+  }
+};
+
+export const userInfo = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized access" });
+    }
+    const user = await User.findById(userId).select("-password");
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    return res.json(user);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -172,12 +236,7 @@ export const resetPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const salt = await bcrypt.genSalt(12);
-    User.password = await bcrypt.hash(newPassword, salt);
-
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-
+    user.password = newPassword;
     await user.save();
     return res.status(200).json({ message: "reset password sucessfully" });
   } catch (error) {
@@ -219,66 +278,64 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
+//refresh token rotation
 export const refreshToken = async (req, res) => {
   const raw = req.cookies?.refreshToken;
   if (!raw) {
     return res.status(401).json({ message: "No refresh token" });
   }
 
-  const token = hashToken(raw);
+  const hashed = hashToken(raw);
 
-  const tokenDoc = await RefreshToken.findOneAndDelete(token);
+  //check token before delete
+  const tokenDoc = await RefreshToken.findOne({ tokenHash: hashed });
 
-  //not found => possible reuse/invalid
-  if (!tokenDoc) {
+  //check exp => delete old token and reovke all refresh tokens
+  if (tokenDoc.expireDate < new Date().getTime()) {
+    await RefreshToken.deleteMany({ userId: tokenDoc?.userId });
     res.clearCookie("refreshToken", { path: "/refresh" });
-    return res.status(401).json({ message: "Invalid refresh token" });
-  }
-
-  if (tokenDoc === null) {
-    res.clearCookie("refreshToken", { path: "/refresh" });
-    return res.status(401).json({ message: "Possible reuse" });
-  }
-
-  if (tokenDoc.expireDate < new Date()) {
     return res.status(401).json({ message: "Refresh token expired" });
   }
+  //valid => rotate token => issue new refresh token + access token
+  else {
+    await RefreshToken.deleteOne({ _id: tokenDoc._id });
 
-  //if valid, issue new refresh token + access token
-  const newTokenRaw = generateRefreshToken();
-  const newTokenHashed = hashToken(newTokenRaw);
-  const newExpireDate = new Date(Date.now() + REFRESH_EXPIRE_MS);
+    const newTokenRaw = generateRefreshToken();
+    const newTokenHashed = hashToken(newTokenRaw);
+    const newExpireDate = new Date(Date.now() + REFRESH_EXPIRE_MS);
 
-  //create new refresh token
-  await RefreshToken.create({
-    userId: tokenDoc.userId,
-    tokenHash: newTokenHashed,
-    expireDate: newExpireDate,
-  });
-
-  //issue new access token
-  const newAccessToken = jwt.sign(
-    {
+    //create new refresh token
+    await RefreshToken.create({
       userId: tokenDoc.userId,
-      role: tokenDoc.role,
-    },
-    process.env.ACCESS_SECRET_KEY,
-    {
-      expiresIn: "1hr",
-    }
-  );
+      tokenHash: newTokenHashed,
+      expireDate: newExpireDate,
+    });
 
-  //send new token in cookie
-  res.cookie("refreshToken", newTokenRaw, {
-    userId: tokenDoc.userId,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: REFRESH_EXPIRE_MS,
-    path: "/refresh",
-  });
+    //issue new access token
+    const user = await User.findById(tokenDoc.userId);
 
-  return res.status(200).json({ message: newAccessToken });
+    const newAccessToken = jwt.sign(
+      {
+        userId: user._id,
+        role: user.role,
+      },
+      process.env.ACCESS_SECRET_KEY,
+      {
+        expiresIn: "1hr",
+      }
+    );
+
+    //send new token in cookie
+    res.cookie("refreshToken", newTokenRaw, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: REFRESH_EXPIRE_MS,
+      path: "/refresh",
+    });
+
+    return res.status(200).json({ accessToken: newAccessToken });
+  }
 };
 
 export const loginWithGoogle = async (req, res) => {
@@ -344,6 +401,7 @@ export const handleRedirect = async (req, res) => {
       }
     );
     res.json({
+      //check this case again, what if deleted in DB, find in DB rather than using isNew property
       message: user.isNew ? "Signup successful" : "Login successful",
       user: {
         id: user._id,

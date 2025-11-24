@@ -23,6 +23,10 @@ const refreshTokenSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  // valid: {
+  //   type: Boolean,
+  //   default: True,
+  // },
 });
 
 const RefreshToken = mongoose.model("refreshToken", refreshTokenSchema);
