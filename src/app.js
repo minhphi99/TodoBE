@@ -15,8 +15,6 @@ const limiter = rateLimit({
 });
 const app = express();
 
-app.set("view engine", "pug");
-app.set("views", path.join(import.meta.dirname, "views"));
 // Middleware
 app.use(express.json());
 app.use(
@@ -27,9 +25,6 @@ app.use(
 );
 app.use(cookieParser());
 app.use(limiter);
-// app.get("/hello/:name", async (req, res) => {
-//   res.render("home", { name: req.params.name });
-// });
 
 // ✅ Tell app to use them
 app.use("/todo", protect, todoRoutes);
