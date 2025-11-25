@@ -19,11 +19,12 @@ export const sendMail = async (options) => {
     return transporter.sendMail(options);
   } catch (error) {
     console.error(error, "email not sent");
+    throw error;
   }
 };
 
 export async function sendPasswordResetEmail(userEmail, token) {
-  const resetLink = `${process.env.RESET_PW_URL}`;
+  const resetLink = `${process.env.RESET_PW_URL}/${token}`;
 
   const mailOptions = {
     from: `"TODO LIST APP" <${process.env.GG_MAIL_USER}>`,
@@ -41,9 +42,7 @@ export async function sendPasswordResetEmail(userEmail, token) {
 
   try {
     const info = await sendMail(mailOptions);
-    console.log(`Password reset email sent to ${userEmail}`);
   } catch (error) {
-    console.error(`Error sending email to ${userEmail}:`, error);
     throw new Error("Email could not be sent.");
   }
 }

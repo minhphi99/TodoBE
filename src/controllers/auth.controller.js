@@ -1,17 +1,15 @@
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
 import TokenBlacklist from "../models/tokenBlacklist.model.js";
 import crypto from "crypto";
 import { generateRefreshToken, hashToken } from "../utils/token.js";
 import RefreshToken from "../models/refreshToken.model.js";
 import axios from "axios";
-// import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { sendPasswordResetEmail } from "../utils/sendmail.js";
-import { success, error } from "./helper.js";
 
 dotenv.config();
+// TODO: Move this to the .env file
 const REFRESH_EXPIRE_MS = 604800000;
 
 export const registerUser = async (req, res) => {
@@ -21,6 +19,7 @@ export const registerUser = async (req, res) => {
     if (!username || !password || !email || !confirmPassword) {
       return res.status(400).json({ message: "Required field is missing" });
     }
+    // TODO: Add a check to ensure that password and confirmPassword are the same.
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(400).json({ message: "User already existed" });
@@ -45,7 +44,7 @@ export const registerUser = async (req, res) => {
     }
   } catch (error) {
     console.error("Registering failed", error);
-    return res.status(500).json({ message: "Server issue hehehe" });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -76,13 +75,12 @@ export const loginWithID = async (req, res) => {
       expireDate: refreshExpireDate,
     });
 
-    //check this again
     res.cookie("refreshToken", rawRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       maxAge: REFRESH_EXPIRE_MS,
-      path: "/auth/refresh",
+      path: "/",
     });
 
     return res.status(200).json({
@@ -157,7 +155,7 @@ export const changePassword = async (req, res) => {
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
         maxAge: REFRESH_EXPIRE_MS,
-        path: "/auth/refresh",
+        path: "/",
       });
 
       return res.status(200).json({
@@ -214,6 +212,7 @@ export const logoutUser = async (req, res) => {
   }
 };
 
+// TODO: This is not secure. A better approach would be to generate a random token, hash it, and store it in the database with an expiration date. Then, when the user clicks the link, you can find the user by the hashed token.
 export const resetPassword = async (req, res) => {
   try {
     const token = req.params;
@@ -229,6 +228,7 @@ export const resetPassword = async (req, res) => {
 
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
+      // TODO: Move this to the .env file
       resetPasswordExpire: "1d",
     });
 
@@ -293,7 +293,7 @@ export const refreshToken = async (req, res) => {
   //check exp => delete old token and reovke all refresh tokens
   if (tokenDoc.expireDate < new Date().getTime()) {
     await RefreshToken.deleteMany({ userId: tokenDoc?.userId });
-    res.clearCookie("refreshToken", { path: "/refresh" });
+    res.clearCookie("refreshToken", { path: "/" });
     return res.status(401).json({ message: "Refresh token expired" });
   }
   //valid => rotate token => issue new refresh token + access token
@@ -331,7 +331,7 @@ export const refreshToken = async (req, res) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       maxAge: REFRESH_EXPIRE_MS,
-      path: "/refresh",
+      path: "/",
     });
 
     return res.status(200).json({ accessToken: newAccessToken });
@@ -378,7 +378,7 @@ export const handleRedirect = async (req, res) => {
     const { email, name, id } = googleUser;
 
     //separate signup and login with OAuth
-    const user = await User.findOne({ email });
+    let user = await User.findOne({ email });
     if (!user) {
       user = await User.create({
         id: id,
@@ -401,7 +401,7 @@ export const handleRedirect = async (req, res) => {
       }
     );
     res.json({
-      //check this case again, what if deleted in DB, find in DB rather than using isNew property
+      // TODO: The isNew property is not reliable. A better approach would be to check if the user was created in this request.
       message: user.isNew ? "Signup successful" : "Login successful",
       user: {
         id: user._id,

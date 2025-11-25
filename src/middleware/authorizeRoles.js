@@ -1,5 +1,3 @@
-// import roles from "../models/roles";
-
 export const authorizeRoles = (...roles) => {
   return (req, res, next) => {
     try {

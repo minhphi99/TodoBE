@@ -26,24 +26,7 @@ app.use(
   })
 );
 app.use(cookieParser());
-// app.use(limiter);
-
-app.use((err, req, res, next) => {
-  console.error(err);
-  res
-    .status(err.status || 500)
-    .json({ message: err.message || "Server Error" });
-});
-
-// app.get("/", protect, async () => {});
-
-// Health check route
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "OK",
-    message: "Todo API is running",
-  });
-});
+app.use(limiter);
 // app.get("/hello/:name", async (req, res) => {
 //   res.render("home", { name: req.params.name });
 // });
@@ -52,4 +35,12 @@ app.get("/health", (req, res) => {
 app.use("/todo", protect, todoRoutes);
 app.use("/auth", authRoutes);
 
+app.use((err, req, res, next) => {
+  console.error(err);
+  res
+    .status(err.status || 500)
+    .json({ message: err.message || "Server Error" });
+});
+
 export default app;
+

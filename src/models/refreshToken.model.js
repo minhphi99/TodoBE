@@ -1,9 +1,6 @@
 import mongoose from "mongoose";
 
 const refreshTokenSchema = new mongoose.Schema({
-  id: {
-    type: String,
-  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -15,7 +12,6 @@ const refreshTokenSchema = new mongoose.Schema({
   },
   expireDate: {
     type: Date,
-    default: Date.now,
     required: true,
     expires: 60 * 60 * 24 * 7, // 7 days
   },
@@ -23,10 +19,6 @@ const refreshTokenSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-  // valid: {
-  //   type: Boolean,
-  //   default: True,
-  // },
 });
 
 const RefreshToken = mongoose.model("refreshToken", refreshTokenSchema);

@@ -1,6 +1,4 @@
-// const Todo = require("../models/todo.model");
 import Todo from "../models/todo.model.js";
-import { success, error } from "./helper.js";
 
 export const createTodo = async (req, res) => {
   try {
@@ -18,7 +16,7 @@ export const getAllTodos = async (req, res) => {
   try {
     const userId = req.user.id;
     const todos = await Todo.find({ userId }).sort({ createdAt: -1 });
-    res.status(201).json(todos);
+    res.status(200).json(todos);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -46,7 +44,7 @@ export const updateTodoById = async (req, res) => {
       req.body,
       { new: true, runValidators: true }
     );
-    if (!updated) return res.status(404).json({ message: "Task not found" });
+    if (!updated) return res.status(404).json({ message: "Todo not found" });
     res.json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -59,9 +57,9 @@ export const deleteTodo = async (req, res) => {
     const { id } = req.params;
     const deleted = await Todo.findOneAndDelete({ _id: id, userId });
     if (!deleted) {
-      return res.status(404).json({ message: "Task not found" });
+      return res.status(404).json({ message: "Todo not found" });
     }
-    res.json({ message: "Task deleted succesfully" });
+    res.json({ message: "Todo deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
